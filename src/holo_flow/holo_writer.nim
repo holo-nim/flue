@@ -10,6 +10,8 @@ type HoloWriter* = object
 proc initHoloWriter*(): HoloWriter {.inline.} =
   result = HoloWriter()
 
+template buffer*(writer: HoloWriter): string = writer.artery.buffer
+
 proc lockFlush*(writer: var HoloWriter) {.inline.} =
   inc writer.flushLocks
 
