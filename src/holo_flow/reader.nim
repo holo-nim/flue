@@ -1,4 +1,4 @@
-import hemodyne/syncvein, std/streams
+import hemodyne/syncvein, std/[streams, unicode]
 
 const holoflowLineColumn* {.booldefine.} = true
   ## enables/disables line column tracking by default, has very little impact on performance
@@ -68,7 +68,30 @@ proc peek*(reader: var HoloReader, c: var char, offset: int): bool {.inline.} =
 proc unsafePeek*(reader: var HoloReader, offset: int): char {.inline.} =
   result = reader.vein.buffer[reader.bufferPos + 1 + offset]
 
-# XXX rune support
+proc peek*(reader: var HoloReader, rune: var Rune): bool {.inline.} =
+  var start: char
+  result = peek(reader, start)
+  if result:
+    result = false
+    let b = start.byte
+    var n = 0
+    if b shr 5 == 0b110:
+      n = 1
+    elif b shr 4 == 0b1110:
+      n = 2
+    elif b shr 3 == 0b11110:
+      n = 3
+    elif b shr 2 == 0b111110:
+      n = 4
+    elif b shr 1 == 0b1111110:
+      n = 5
+    else:
+      return
+    if reader.bufferPos + 1 + n >= reader.vein.buffer.len:
+      reader.loadBufferBy(n)
+    if reader.bufferPos + 1 + n < reader.vein.buffer.len:
+      result = true
+      fastRuneAt(reader.vein.buffer, reader.bufferPos + 1, rune, doInc = false)
 
 template peekStrImpl(reader: var HoloReader, cs) =
   result = false
@@ -152,6 +175,20 @@ proc next*(reader: var HoloReader, c: var char): bool {.inline.} =
   if reader.bufferLocks == 0: reader.vein.setFreeBefore(prevPos)
   result = true
 
+proc next*(reader: var HoloReader, rune: var Rune): bool {.inline.} =
+  if not peek(reader, rune):
+    return false
+  let prevPos = reader.bufferPos
+  inc reader.bufferPos, size(rune)
+  if reader.doLineColumn:
+    if rune == Rune('\n') or (rune == Rune('\r') and reader.peekOrZero() != '\n'):
+      inc reader.line
+      reader.column = 1
+    else:
+      inc reader.column
+  if reader.bufferLocks == 0: reader.vein.setFreeBefore(prevPos)
+  result = true
+
 proc next*(reader: var HoloReader): bool {.inline.} =
   var dummy: char
   result = next(reader, dummy)
@@ -183,6 +220,18 @@ proc peekMatch*(reader: var HoloReader, c: char, offset: int): bool {.inline.} =
     result = true
   else:
     result = false
+
+proc peekMatch*(reader: var HoloReader, rune: Rune): bool {.inline.} =
+  var rune2: Rune
+  if reader.peek(rune2) and rune2 == rune:
+    result = true
+  else:
+    result = false
+
+proc nextMatch*(reader: var HoloReader, rune: Rune): bool {.inline.} =
+  result = peekMatch(reader, rune)
+  if result:
+    reader.unsafeNextBy(size(rune))
 
 proc peekMatch*(reader: var HoloReader, cs: set[char], c: var char): bool {.inline.} =
   if reader.peek(c) and c in cs:

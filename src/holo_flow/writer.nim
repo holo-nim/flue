@@ -1,4 +1,4 @@
-import hemodyne/syncartery, std/streams
+import hemodyne/syncartery, std/[streams, unicode]
 
 type HoloWriter* = object
   artery*: Artery # for like buffering writing to a file
@@ -40,6 +40,11 @@ proc finishDump*(writer: var HoloWriter): string {.inline.} =
 proc addToBuffer*(writer: var HoloWriter, c: char) {.inline.} =
   writer.flushPos -= writer.artery.addToBuffer(c)
 
+proc addToBuffer*(writer: var HoloWriter, rune: Rune) {.inline.} =
+  var bytes = newString(size(rune))
+  fastToUTF8Copy(rune, bytes, 0, doInc = false)
+  writer.flushPos -= writer.artery.addToBuffer(bytes)
+
 proc addToBuffer*(writer: var HoloWriter, s: sink string) {.inline.} =
   writer.flushPos -= writer.artery.addToBuffer(s)
 
@@ -52,7 +57,9 @@ proc write*(writer: var HoloWriter, c: char) {.inline.} =
   writer.addToBuffer(c)
   writer.consumeBuffer()
 
-# XXX rune support
+proc write*(writer: var HoloWriter, c: Rune) {.inline.} =
+  writer.addToBuffer(c)
+  writer.consumeBuffer()
 
 proc write*(writer: var HoloWriter, s: sink string) {.inline.} =
   writer.addToBuffer(s)
