@@ -11,6 +11,9 @@ type
 
 {.push checks: off, stacktrace: off.}
 
+proc initLoadReader*(doLineColumn = holoReaderLineColumn): LoadReader {.inline.} =
+  result = LoadReader(state: initReadState(doLineColumn))
+
 proc startLoad*(load: var LoadState, str: sink string) {.inline.} =
   load.buffer = initLoadBuffer(str)
   load.bufferLocks = 0
@@ -28,9 +31,6 @@ when declared(File):
     ## `file` has to last as long as the loader
     load.buffer = initLoadBuffer(file, loadAmount, bufferCapacity)
     load.bufferLocks = 0
-
-proc initLoadReader*(doLineColumn = holoReaderLineColumn): LoadReader {.inline.} =
-  result = LoadReader(state: initReadState(doLineColumn))
 
 proc startRead*(reader: var LoadReader, str: sink string) {.inline.} =
   startLoad(reader.load, str)

@@ -12,6 +12,8 @@ type
     freeBefore*: int
       ## position before which we can cull the buffer
 
+{.push checks: off, stacktrace: off.}
+
 proc initLoadBuffer*(str: sink string): LoadBuffer {.inline.} =
   result = LoadBuffer(data: str, loader: nil)
 
@@ -48,6 +50,7 @@ proc callLoader*(buffer: var LoadBuffer): int =
     buffer.freeBefore = 0
 
 proc loadOnce*(buffer: var LoadBuffer): int {.inline.} =
+  ## returns number of moved chars
   result = 0
   if not buffer.loader.isNil:
     result = buffer.callLoader()
@@ -70,6 +73,9 @@ proc callLoaderBy*(buffer: var LoadBuffer, n: int): int =
     left -= ex.len
 
 proc loadBy*(buffer: var LoadBuffer, n: int): int {.inline.} =
+  ## returns number of moved chars
   result = 0
   if not buffer.loader.isNil:
     result = buffer.callLoaderBy(n)
+
+{.pop.}

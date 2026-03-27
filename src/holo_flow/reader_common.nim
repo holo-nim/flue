@@ -13,6 +13,8 @@ type
 
   SomeBuffer* = typed
 
+{.push checks: off, stacktrace: off.}
+
 proc initReadState*(doLineColumn = holoReaderLineColumn): ReadState {.inline.} =
   result = ReadState(doLineColumn: doLineColumn)
 
@@ -27,3 +29,5 @@ template doPeek*(data: SomeBuffer, dataLen: int, nextPos: int, c: var char, resu
     result = true
   else:
     result = false
+
+{.pop.}
