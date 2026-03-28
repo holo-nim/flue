@@ -8,7 +8,7 @@ when false:
     type LoadReaderType = LoadReader
   else:
     {.fatal: "this is an include in the load_reader module".}
-elif not declared(LoadReader):
+elif not declared(LoadReaderType):
   {.fatal: "this is an include in the load_reader module".}
 
 proc startRead*(reader: var LoadReaderType, str: sink string) {.inline.} =

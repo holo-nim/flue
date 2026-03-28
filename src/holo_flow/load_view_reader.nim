@@ -1,3 +1,5 @@
+{.deprecated: "not up to date".}
+
 import ./[load_reader, load_buffer, reader_common]
 import std/[streams, unicode] # just to expose API otherwise not used
 
