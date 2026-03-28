@@ -216,23 +216,25 @@ proc unsafeNext*(reader: var LoadReader, last: Rune) {.inline.} =
 
 proc unsafeNextBy*(reader: var LoadReader, n: int) {.inline.} =
   # keep separate from next for now
-  inc reader.state.pos, n
+  let prevPos = reader.state.pos
+  let newPos = prevPos + n
+  reader.state.pos = newPos
   when not holoReaderDisableLineColumn:
     if reader.state.doLineColumn:
-      for i in reader.state.pos - n + 1 ..< reader.state.pos:
+      for i in prevPos + 1 ..< newPos:
         let c = reader.currentBuffer[i]
         if c == '\n' or (c == '\r' and reader.currentBuffer[i + 1] != '\n'):
           inc reader.state.line
           reader.state.column = 1
         else:
           inc reader.state.column
-      let cf = reader.currentBuffer[reader.state.pos]
+      let cf = reader.currentBuffer[newPos]
       if cf == '\n' or (cf == '\r' and peekOrZero(reader) != '\n'):
         inc reader.state.line
         reader.state.column = 1
       else:
         inc reader.state.column
-  if reader.load.bufferLocks == 0: reader.load.buffer.freeBefore = reader.state.pos - 1
+  if reader.load.bufferLocks == 0: reader.load.buffer.freeBefore = newPos - 1
 
 proc next*(reader: var LoadReader, c: var char): bool {.inline.} =
   # keep separate from unsafeNext for now
