@@ -12,7 +12,8 @@ import std/[os, strutils]
 
 let srcDir = "src"
 var files: seq[FilePath] = @[]
-for f in walkDirRec(srcDir):
-  if f.endsWith(".nim")#[ and not f.endsWith("_api.nim")]#:
-    files.add f
+for dirs in [srcDir]: # ignore includes dir
+  for kind, f in walkDir(srcDir):
+    if kind == pcFile and f.endsWith(".nim"):
+      files.add f
 buildDocs(files, gitUrl = "https://github.com/holo-nim/holo-flow", rootDir = srcDir)

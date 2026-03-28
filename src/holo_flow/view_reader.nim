@@ -3,41 +3,47 @@ import std/unicode # just to expose API otherwise not used
 
 export doLineColumn, line, column
 
-when holoReaderDisableTracking:
+when true or holoReaderDisableTracking:
   type StateType = ReadState
 else:
   type StateType = TrackedReadState
 
 when defined(js):
-  type BufferView* = string
+  type ViewBuffer* = string
   type StateView* = ref StateType
-elif holoReaderUseViews:
-  type BufferView* = cstring
-  type StateView* = var StateType
 else:
-  type BufferView* = cstring
-  type StateView* = ptr StateType
+  type ViewBuffer* = object
+    data*: ptr UncheckedArray[char]
+    len*: int
+  
+  template `[]`*(a: ViewBuffer, b: untyped): untyped = a.data[b]
+  proc `[]`*(a: ViewBuffer, b: Slice[int]): string =
+    if b.b < b.a: return ""
+    result = newString(b.b - b.a + 1)
+    for i in b.a .. b.b:
+      result[i] = a.data[i]
+  #template `[]=`*(a: ViewBuffer, b, c: untyped): untyped = a.data[b] = c
+  template toOpenArray*(a: ViewBuffer, i, j: untyped): untyped =
+    a.data.toOpenArray(i, j)
+
+  when holoReaderUseViews:
+    type StateView* = var StateType
+  else:
+    type StateView* = ptr StateType
 
 type
   ViewReader* = object
     ## view type over the `LoadReader` type,
     ## to reduce pointer dereferences
-    bufferView*: BufferView
-    when BufferView is cstring:
-      bufferViewLen*: int
+    bufferView*: ViewBuffer
     statePtr*: StateView
 
 when defined(js):
   template jsRawSet(a, b) =
     {.emit: [a, " = ", b, ";"].}
 
-  template bufferViewLen*(reader: ViewReader): int =
-    reader.bufferView.len
   template `buffer=`*(reader: ViewReader, s: string) =
     jsRawSet(reader.bufferView, s)
-
-  template currentBuffer*(reader: ViewReader): untyped =
-    reader.bufferView
 
   type State = StateType
   template state*(reader: ViewReader): State =
@@ -48,25 +54,7 @@ when defined(js):
     reader.statePtr[] = s
 else:
   template `buffer=`*(reader: ViewReader, s: string) =
-    reader.bufferView = cstring(s)
-    reader.bufferViewLen = s.len
-
-  type Buffer* = object
-    data*: ptr UncheckedArray[char]
-    len*: int
-  
-  template `[]`*(a: Buffer, b: untyped): untyped = a.data[b]
-  proc `[]`*(a: Buffer, b: Slice[int]): string =
-    if b.b < b.a: return ""
-    result = newString(b.b - b.a + 1)
-    for i in b.a .. b.b:
-      result[i] = a.data[i]
-  template `[]=`*(a: Buffer, b, c: untyped): untyped = a.data[b] = c
-  template toOpenArray*(a: Buffer, i, j: untyped): untyped =
-    a.data.toOpenArray(i, j)
-
-  proc currentBuffer*(reader: ViewReader): Buffer {.inline.} =
-    Buffer(data: cast[ptr UncheckedArray[char]](reader.bufferView), len: reader.bufferViewLen)
+    reader.bufferView = ViewBuffer(data: cast[ptr UncheckedArray[char]](cstring(s)), len: s.len)
 
   when StateView is ptr:
     type State = var StateType
@@ -88,6 +76,8 @@ else:
     {.error: "unknown way to handle state type: " & $ReaderState.}
 
 template bufferPos*(reader: ViewReader): int = reader.state.pos
+template currentBuffer*(reader: ViewReader): untyped =
+  reader.bufferView
 
 {.push checks: off, stacktrace: off.}
 
@@ -101,7 +91,7 @@ proc startRead*(reader: var ViewReader, str: string) {.inline.} =
 
 proc peek*(reader: ViewReader, c: var char): bool {.inline.} =
   let nextPos = reader.bufferPos + 1
-  doPeek(reader.bufferView, reader.bufferViewLen, nextPos, c, result)
+  doPeek(reader.bufferView, reader.bufferView.len, nextPos, c, result)
 
 proc unsafePeek*(reader: ViewReader): char {.inline.} =
   # this is extra unsafe
@@ -109,7 +99,7 @@ proc unsafePeek*(reader: ViewReader): char {.inline.} =
 
 proc peek*(reader: ViewReader, c: var char, offset: int): bool {.inline.} =
   let nextPos = reader.bufferPos + 1 + offset
-  doPeek(reader.bufferView, reader.bufferViewLen, nextPos, c, result)
+  doPeek(reader.bufferView, reader.bufferView.len, nextPos, c, result)
 
 proc unsafePeek*(reader: ViewReader, offset: int): char {.inline.} =
   # this is extra unsafe
@@ -118,7 +108,7 @@ proc unsafePeek*(reader: ViewReader, offset: int): char {.inline.} =
 proc peekCount*(reader: ViewReader, rune: var Rune): int {.inline.} =
   ## returns rune size if rune is peeked
   let bpos = reader.bufferPos
-  if bpos + 1 < reader.bufferViewLen:
+  if bpos + 1 < reader.bufferView.len:
     let start = reader.bufferView[bpos + 1]
     result = 0
     let b = start.byte
@@ -135,9 +125,9 @@ proc peekCount*(reader: ViewReader, rune: var Rune): int {.inline.} =
       n = 5
     else:
       return
-    if bpos + 1 + n < reader.bufferViewLen:
+    if bpos + 1 + n < reader.bufferView.len:
       result = n
-      fastRuneAt(reader.bufferView.toOpenArray(0, reader.bufferViewLen - 1), bpos + 1, rune, doInc = false)
+      fastRuneAt(reader.bufferView.toOpenArray(0, reader.bufferView.len - 1), bpos + 1, rune, doInc = false)
 
 proc peek*(reader: ViewReader, rune: var Rune): bool {.inline.} =
   result = peekCount(reader, rune) != 0
@@ -146,7 +136,7 @@ template peekStrImpl(reader: ViewReader, cs) =
   result = false
   let n = cs.len
   let bpos = reader.bufferPos
-  if bpos + n < reader.bufferViewLen:
+  if bpos + n < reader.bufferView.len:
     result = true
     when nimvm:
       for i in 0 ..< n:
@@ -228,7 +218,7 @@ proc nextMatch*(reader: ViewReader, c: char): bool {.inline.} =
 
 proc peekMatch*(reader: ViewReader, c: char, offset: int): bool {.inline.} =
   let bpos = reader.bufferPos
-  if bpos + 1 + offset < reader.bufferViewLen:
+  if bpos + 1 + offset < reader.bufferView.len:
     if c != reader.bufferView[bpos + 1 + offset]:
       return false
     result = true
@@ -268,7 +258,7 @@ proc nextMatch*(reader: ViewReader, cs: set[char]): bool {.inline.} =
 
 proc peekMatch*(reader: ViewReader, cs: set[char], offset: int, c: var char): bool {.inline.} =
   let bpos = reader.bufferPos
-  if bpos + 1 + offset < reader.bufferViewLen:
+  if bpos + 1 + offset < reader.bufferView.len:
     let c2 = reader.bufferView[bpos + 1 + offset]
     if c2 in cs:
       c = c2
@@ -283,7 +273,7 @@ proc peekMatch*(reader: ViewReader, cs: set[char], offset: int): bool {.inline.}
 
 template peekMatchStrImpl(reader: ViewReader, str) =
   let bpos = reader.bufferPos
-  if bpos + str.len < reader.bufferViewLen:
+  if bpos + str.len < reader.bufferView.len:
     for i in 0 ..< str.len:
       if str[i] != reader.bufferView[bpos + 1 + i]:
         return false
