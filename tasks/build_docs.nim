@@ -16,4 +16,4 @@ for dirs in [srcDir]: # ignore includes dir
   for kind, f in walkDir(srcDir):
     if kind == pcFile and f.endsWith(".nim"):
       files.add f
-buildDocs(files, gitUrl = "https://github.com/holo-nim/flue", rootDir = srcDir)
+buildDocs(files, gitUrl = "https://github.com/holo-nim/fleu", rootDir = srcDir)

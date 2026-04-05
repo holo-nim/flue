@@ -2,5 +2,5 @@
 ##
 ## the buffer also shrinks to remove data up to a position marked as read when it needs to resize, although a queue would be better for this, but strings keep compatibility
 
-import flue/[load_reader, view_reader, flush_writer]
+import fleu/[load_reader, view_reader, flush_writer]
 export load_reader, view_reader, flush_writer
